@@ -41,7 +41,7 @@ class SnakesAndLadders:
     def __init__(self, root):
         self.root = root
         self.root.title("Snakes & Ladders - Python Edition")
-        self.root.geometry("900x700")
+        self.root.geometry("920x720")
         self.root.configure(bg="#1e1e2e")
 
         # Game Board Configuration (10x10)
@@ -53,6 +53,7 @@ class SnakesAndLadders:
         self.vs_computer = False
         self.current_player = 0  # 0: Player 1, 1: Player 2 / Computer
         self.positions = [0, 0]
+        self.scores = [0, 0]
         self.player_colors = ["#ff5555", "#50fa7b"]
         self.player_names = ["Player 1", "Player 2"]
         self.is_rolling = False
@@ -61,41 +62,62 @@ class SnakesAndLadders:
 
     def _build_gui(self):
         # Sidebar Panel
-        sidebar = tk.Frame(self.root, bg="#282a36", width=250, padx=15, pady=15)
+        sidebar = tk.Frame(self.root, bg="#282a36", width=260, padx=15, pady=15)
         sidebar.pack(side=tk.LEFT, fill=tk.Y, padx=10, pady=10)
 
         title = tk.Label(sidebar, text="Snakes &\nLadders", font=("Helvetica", 20, "bold"), fg="#bd93f9", bg="#282a36")
-        title.pack(pady=(10, 20))
+        title.pack(pady=(5, 15))
 
-        # Mode Selection
-        tk.Label(sidebar, text="Game Mode:", font=("Helvetica", 11, "bold"), fg="#f8f8f2", bg="#282a36").pack(anchor="w")
+        # Mode Selection (Opponent)
+        tk.Label(sidebar, text="Opponent:", font=("Helvetica", 10, "bold"), fg="#f8f8f2", bg="#282a36").pack(anchor="w")
         self.mode_var = tk.StringVar(value="p2p")
         
         rb1 = tk.Radiobutton(sidebar, text="2 Players (Local)", variable=self.mode_var, value="p2p", 
                              bg="#282a36", fg="#f8f8f2", selectcolor="#44475a", activebackground="#282a36", 
-                             font=("Helvetica", 10), command=self.reset_game)
+                             font=("Helvetica", 9), command=self.reset_match)
         rb2 = tk.Radiobutton(sidebar, text="VS Computer AI", variable=self.mode_var, value="ai", 
                              bg="#282a36", fg="#f8f8f2", selectcolor="#44475a", activebackground="#282a36", 
-                             font=("Helvetica", 10), command=self.reset_game)
-        rb1.pack(anchor="w", pady=2)
-        rb2.pack(anchor="w", pady=2)
+                             font=("Helvetica", 9), command=self.reset_match)
+        rb1.pack(anchor="w", pady=1)
+        rb2.pack(anchor="w", pady=1)
+
+        # Match Target Selection (Single Game vs First to 3 Wins)
+        tk.Label(sidebar, text="Match Target:", font=("Helvetica", 10, "bold"), fg="#f8f8f2", bg="#282a36").pack(anchor="w", pady=(10, 0))
+        self.target_var = tk.StringVar(value="1")
+
+        rb_single = tk.Radiobutton(sidebar, text="Single Match", variable=self.target_var, value="1", 
+                                   bg="#282a36", fg="#f8f8f2", selectcolor="#44475a", activebackground="#282a36", 
+                                   font=("Helvetica", 9), command=self.reset_match)
+        rb_first3 = tk.Radiobutton(sidebar, text="First to 3 Wins", variable=self.target_var, value="3", 
+                                   bg="#282a36", fg="#f8f8f2", selectcolor="#44475a", activebackground="#282a36", 
+                                   font=("Helvetica", 9), command=self.reset_match)
+        rb_single.pack(anchor="w", pady=1)
+        rb_first3.pack(anchor="w", pady=1)
+
+        # Score Tracker Frame
+        score_frame = tk.Frame(sidebar, bg="#44475a", padx=10, pady=8)
+        score_frame.pack(fill=tk.X, pady=15)
+        
+        tk.Label(score_frame, text="SCOREBOARD", font=("Helvetica", 9, "bold"), fg="#8be9fd", bg="#44475a").pack()
+        self.lbl_scores = tk.Label(score_frame, text="P1: 0  |  P2: 0", font=("Helvetica", 11, "bold"), fg="#f8f8f2", bg="#44475a")
+        self.lbl_scores.pack(pady=2)
 
         # Status & Turn Displays
         self.lbl_turn = tk.Label(sidebar, text="Turn: Player 1", font=("Helvetica", 12, "bold"), fg="#ff5555", bg="#282a36")
-        self.lbl_turn.pack(pady=(20, 10))
+        self.lbl_turn.pack(pady=(5, 5))
 
         # Dice Display Box
-        self.lbl_dice = tk.Label(sidebar, text="🎲", font=("Helvetica", 48), fg="#f8f8f2", bg="#44475a", width=3, height=1)
-        self.lbl_dice.pack(pady=10)
+        self.lbl_dice = tk.Label(sidebar, text="🎲", font=("Helvetica", 40), fg="#f8f8f2", bg="#44475a", width=3, height=1)
+        self.lbl_dice.pack(pady=5)
 
         # Roll Action Button
         self.btn_roll = tk.Button(sidebar, text="ROLL DICE", font=("Helvetica", 12, "bold"), fg="#282a36", bg="#50fa7b",
                                   activebackground="#69ff94", bd=0, padx=10, pady=8, cursor="hand2", command=self.roll_dice)
-        self.btn_roll.pack(pady=15, fill=tk.X)
+        self.btn_roll.pack(pady=10, fill=tk.X)
 
         # Reset Button
-        btn_reset = tk.Button(sidebar, text="Reset Game", font=("Helvetica", 10), fg="#f8f8f2", bg="#ff5555",
-                              bd=0, pady=5, cursor="hand2", command=self.reset_game)
+        btn_reset = tk.Button(sidebar, text="Reset Score & Game", font=("Helvetica", 10), fg="#f8f8f2", bg="#ff5555",
+                              bd=0, pady=5, cursor="hand2", command=self.reset_match)
         btn_reset.pack(side=tk.BOTTOM, fill=tk.X)
 
         # Game Canvas (Board)
@@ -219,11 +241,22 @@ class SnakesAndLadders:
             self.positions[p] = self.snakes[pos]
             self.draw_board()
 
-        # Victory Check
+        # Round Victory Check
         if self.positions[p] == 100:
             play_tone(frequency=600, duration=0.4)
-            messagebox.showinfo("Game Over!", f"🎉 {self.player_names[p]} Wins!")
-            self.reset_game()
+            self.scores[p] += 1
+            self.update_score_display()
+
+            target_wins = int(self.target_var.get())
+            if self.scores[p] >= target_wins:
+                if target_wins > 1:
+                    messagebox.showinfo("Tournament Champion!", f"🏆 {self.player_names[p]} won {target_wins} rounds and took the match!")
+                else:
+                    messagebox.showinfo("Game Over!", f"🎉 {self.player_names[p]} Wins!")
+                self.reset_match()
+            else:
+                messagebox.showinfo("Round Over", f"🎉 {self.player_names[p]} wins this round!\n\nCurrent Score:\n{self.player_names[0]}: {self.scores[0]}\n{self.player_names[1]}: {self.scores[1]}")
+                self.start_next_round()
             return
 
         # Switch Turn
@@ -243,17 +276,27 @@ class SnakesAndLadders:
             self.btn_roll.config(state=tk.DISABLED)
             self.root.after(800, self.roll_dice)
 
-    def reset_game(self):
+    def update_score_display(self):
+        p2_label = "Comp" if self.vs_computer else "P2"
+        self.lbl_scores.config(text=f"P1: {self.scores[0]}  |  {p2_label}: {self.scores[1]}")
+
+    def start_next_round(self):
+        """Resets token positions for a new round while keeping score."""
         self.positions = [0, 0]
         self.current_player = 0
         self.is_rolling = False
-        self.vs_computer = (self.mode_var.get() == "ai")
-        self.player_names[1] = "Computer" if self.vs_computer else "Player 2"
-
         self.lbl_turn.config(text=f"Turn: {self.player_names[0]}", fg=self.player_colors[0])
         self.lbl_dice.config(text="🎲")
         self.btn_roll.config(state=tk.NORMAL)
         self.draw_board()
+
+    def reset_match(self):
+        """Resets tokens, scores, and resets the full tournament."""
+        self.scores = [0, 0]
+        self.vs_computer = (self.mode_var.get() == "ai")
+        self.player_names[1] = "Computer" if self.vs_computer else "Player 2"
+        self.update_score_display()
+        self.start_next_round()
 
 
 if __name__ == "__main__":
